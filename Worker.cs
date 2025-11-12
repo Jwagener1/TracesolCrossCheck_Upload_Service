@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options; // NEW
 using System.IO;                    // NEW
 using TracesolCrossCheck_Upload_Service.Helpers;
+using TracesolCrossCheck_Upload_Service.Models;
 
 namespace TracesolCrossCheck_Upload_Service
 {
@@ -10,18 +11,27 @@ namespace TracesolCrossCheck_Upload_Service
         private readonly IOptionsMonitor<UploadServiceSettings> _uploadMonitor; // switched to monitor
         private readonly IOptionsMonitor<DatabaseSettings> _dbMonitor; // switched to monitor
         private readonly IDbConnectionHelper _dbHelper;
+        private readonly IItemLogQueryHelper _itemLogQueryHelper;
+        private readonly IItemLogCsvWriter _csvWriter;
+        private readonly IItemLogUpdateHelper _updateHelper;
 
         public Worker(
             ILogger<Worker> logger,
             IOptionsMonitor<UploadServiceSettings> upload,
             IOptionsMonitor<DatabaseSettings> db, // NEW
-            IDbConnectionHelper dbHelper
+            IDbConnectionHelper dbHelper,
+            IItemLogQueryHelper itemLogQueryHelper,
+            IItemLogCsvWriter csvWriter,
+            IItemLogUpdateHelper updateHelper
         )
         {
             _logger = logger;
             _uploadMonitor = upload;
             _dbMonitor = db;
             _dbHelper = dbHelper;
+            _itemLogQueryHelper = itemLogQueryHelper;
+            _csvWriter = csvWriter;
+            _updateHelper = updateHelper;
 
             var dbSettings = _dbMonitor.CurrentValue;
             var uploadSettings = _uploadMonitor.CurrentValue;
@@ -80,6 +90,38 @@ namespace TracesolCrossCheck_Upload_Service
             {
                 var upload = _uploadMonitor.CurrentValue;
                 var db = _dbMonitor.CurrentValue;
+
+                try
+                {
+                    var record = await _itemLogQueryHelper.QueryFirstUnsentAsync(stoppingToken);
+                    if (record is not null)
+                    {
+                        _logger.LogInformation(
+                            "First unsent record: ID={Id}, SKU={Sku}, Date={Date}",
+                            record.ID, record.SKU, record.DateTimeStamp
+                        );
+                        _logger.LogDebug("Record details: {@Record}", record);
+
+                        // Write CSV
+                        var path = await _csvWriter.WriteRecordAsync(record, stoppingToken);
+                        _logger.LogInformation("Record written to CSV: {Path}", path);
+
+                        // Mark as sent
+                        var marked = await _updateHelper.MarkSentAsync(record.ID, stoppingToken);
+                        if (marked)
+                            _logger.LogInformation("Record {Id} marked as sent.", record.ID);
+                        else
+                            _logger.LogWarning("Record {Id} was not updated (already sent or missing).", record.ID);
+                    }
+                    else
+                    {
+                        _logger.LogInformation("No unsent records found.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error while processing record");
+                }
 
                 _logger.LogDebug(
                     "Tick @ {now} (Interval {ms} ms) - targeting table {table}",

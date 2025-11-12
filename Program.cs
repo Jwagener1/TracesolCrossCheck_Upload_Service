@@ -38,6 +38,9 @@ builder.Services.Configure<DatabaseSettings>(
 
 // Register helpers
 builder.Services.AddSingleton<IDbConnectionHelper, DbConnectionHelper>();
+builder.Services.AddSingleton<IItemLogQueryHelper, ItemLogQueryHelper>();
+builder.Services.AddSingleton<IItemLogCsvWriter, ItemLogCsvWriter>();
+builder.Services.AddSingleton<IItemLogUpdateHelper, ItemLogUpdateHelper>();
 
 builder.Services.AddHostedService<Worker>();
 
