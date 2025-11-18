@@ -7,10 +7,10 @@ namespace TracesolCrossCheck_Upload_Service.Helpers;
 
 public interface IItemLogCsvWriter
 {
-    // Writes a single record to a CSV file in the configured output folder, returns the file path
+    // Writes a single record to a CSV file in LocalFilePath, then copies it to RemoteFilePath. Returns the local file path.
     Task<string> WriteRecordAsync(ItemLogRecord record, CancellationToken ct = default);
 
-    // Writes multiple records to a single CSV file (data rows only), returns the file path
+    // Writes multiple records to a single CSV file (data rows only) in LocalFilePath, then copies it to RemoteFilePath. Returns the local file path.
     Task<string> WriteRecordsAsync(IEnumerable<ItemLogRecord> records, string? fileName = null, CancellationToken ct = default);
 
     // Produces CSV text; data row only by default
@@ -28,14 +28,31 @@ public sealed class ItemLogCsvWriter : IItemLogCsvWriter
 
     public async Task<string> WriteRecordAsync(ItemLogRecord record, CancellationToken ct = default)
     {
-        var folder = _uploadOptions.CurrentValue.CsvOutputFolder;
-        Directory.CreateDirectory(folder);
+        var settings = _uploadOptions.CurrentValue;
+        var localFolder = settings.LocalFilePath;
+        var remoteFolder = settings.RemoteFilePath;
+
+        Directory.CreateDirectory(localFolder);
+        if (!string.IsNullOrWhiteSpace(remoteFolder))
+        {
+            // Ensure destination exists; if invalid path this will throw and be handled by caller
+            Directory.CreateDirectory(remoteFolder);
+        }
+
         var fileName = $"record_{record.ID}_{record.DateTimeStamp:yyyyMMdd_HHmmss}.csv";
-        var path = Path.Combine(folder, SanitizeFileName(fileName));
+        var localPath = Path.Combine(localFolder, SanitizeFileName(fileName));
 
         var csv = ToCsv(record, includeHeader: false); // data only
-        await File.WriteAllTextAsync(path, csv, Encoding.UTF8, ct);
-        return path;
+        await File.WriteAllTextAsync(localPath, csv, Encoding.UTF8, ct);
+
+        // Copy to remote if configured
+        if (!string.IsNullOrWhiteSpace(remoteFolder))
+        {
+            var remotePath = Path.Combine(remoteFolder, SanitizeFileName(fileName));
+            File.Copy(localPath, remotePath, overwrite: true);
+        }
+
+        return localPath;
     }
 
     public async Task<string> WriteRecordsAsync(IEnumerable<ItemLogRecord> records, string? fileName = null, CancellationToken ct = default)
@@ -44,18 +61,33 @@ public sealed class ItemLogCsvWriter : IItemLogCsvWriter
         if (list.Count == 0)
             throw new InvalidOperationException("No records to write");
 
-        var folder = _uploadOptions.CurrentValue.CsvOutputFolder;
-        Directory.CreateDirectory(folder);
+        var settings = _uploadOptions.CurrentValue;
+        var localFolder = settings.LocalFilePath;
+        var remoteFolder = settings.RemoteFilePath;
+
+        Directory.CreateDirectory(localFolder);
+        if (!string.IsNullOrWhiteSpace(remoteFolder))
+        {
+            Directory.CreateDirectory(remoteFolder);
+        }
+
         var name = fileName ?? $"records_{DateTime.UtcNow:yyyyMMdd_HHmmss}.csv";
-        var path = Path.Combine(folder, SanitizeFileName(name));
+        var localPath = Path.Combine(localFolder, SanitizeFileName(name));
 
         var sb = new StringBuilder();
         // No header line; write data rows only
         foreach (var r in list)
             sb.AppendLine(ToCsvLine(r));
 
-        await File.WriteAllTextAsync(path, sb.ToString(), Encoding.UTF8, ct);
-        return path;
+        await File.WriteAllTextAsync(localPath, sb.ToString(), Encoding.UTF8, ct);
+
+        if (!string.IsNullOrWhiteSpace(remoteFolder))
+        {
+            var remotePath = Path.Combine(remoteFolder, SanitizeFileName(name));
+            File.Copy(localPath, remotePath, overwrite: true);
+        }
+
+        return localPath;
     }
 
     public string ToCsv(ItemLogRecord record, bool includeHeader = false)

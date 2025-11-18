@@ -43,8 +43,8 @@ namespace TracesolCrossCheck_Upload_Service
             );
 
             _logger.LogInformation(
-                "Upload config loaded: CsvOutputFolder={Folder}, IntervalMs={Interval}",
-                uploadSettings.CsvOutputFolder, uploadSettings.IntervalMs
+                "Upload config loaded: LocalFilePath={Local}, RemoteFilePath={Remote}, IntervalMs={Interval}",
+                uploadSettings.LocalFilePath, uploadSettings.RemoteFilePath, uploadSettings.IntervalMs
             );
 
             // Test DB connection right after logging settings
@@ -67,18 +67,37 @@ namespace TracesolCrossCheck_Upload_Service
                 );
             }
 
-            if (!string.IsNullOrWhiteSpace(uploadSettings.CsvOutputFolder))
-                Directory.CreateDirectory(uploadSettings.CsvOutputFolder);
+            // Ensure local/remote directories
+            if (!string.IsNullOrWhiteSpace(uploadSettings.LocalFilePath))
+            {
+                Directory.CreateDirectory(uploadSettings.LocalFilePath);
+            }
+            if (!string.IsNullOrWhiteSpace(uploadSettings.RemoteFilePath))
+            {
+                try { Directory.CreateDirectory(uploadSettings.RemoteFilePath); }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to create RemoteFilePath at startup: {Path}", uploadSettings.RemoteFilePath);
+                }
+            }
 
-            // Watch for changes to ensure folder exists if path changes at runtime
+            // Watch for changes to ensure folders exist if paths change at runtime
             _uploadMonitor.OnChange(updated =>
             {
-                if (!string.IsNullOrWhiteSpace(updated.CsvOutputFolder))
+                if (!string.IsNullOrWhiteSpace(updated.LocalFilePath))
                 {
-                    try { Directory.CreateDirectory(updated.CsvOutputFolder); }
+                    try { Directory.CreateDirectory(updated.LocalFilePath); }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Failed to create CsvOutputFolder at runtime: {Path}", updated.CsvOutputFolder);
+                        _logger.LogError(ex, "Failed to create LocalFilePath at runtime: {Path}", updated.LocalFilePath);
+                    }
+                }
+                if (!string.IsNullOrWhiteSpace(updated.RemoteFilePath))
+                {
+                    try { Directory.CreateDirectory(updated.RemoteFilePath); }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to create RemoteFilePath at runtime: {Path}", updated.RemoteFilePath);
                     }
                 }
             });
@@ -102,7 +121,7 @@ namespace TracesolCrossCheck_Upload_Service
                         );
                         _logger.LogDebug("Record details: {@Record}", record);
 
-                        // Write CSV
+                        // Write CSV locally and copy to remote
                         var path = await _csvWriter.WriteRecordAsync(record, stoppingToken);
                         _logger.LogInformation("Record written to CSV: {Path}", path);
 

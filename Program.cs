@@ -26,9 +26,9 @@ Log.Logger = new LoggerConfiguration()
 builder.Logging.ClearProviders();
 builder.Logging.AddSerilog(Log.Logger, dispose: true);
 
-// Bind just the UploadService section to our POCO
+// Bind just the Upload section to our POCO
 builder.Services.Configure<UploadServiceSettings>(
-    builder.Configuration.GetSection("UploadService")
+    builder.Configuration.GetSection("Upload")
 );
 
 // Bind database settings
