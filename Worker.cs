@@ -25,6 +25,8 @@ namespace TracesolCrossCheck_Upload_Service
             IItemLogUpdateHelper updateHelper
         )
         {
+            using var scope = logger.BeginScope(new Dictionary<string, object> { ["System"] = "APP" });
+
             _logger = logger;
             _uploadMonitor = upload;
             _dbMonitor = db;
@@ -50,21 +52,27 @@ namespace TracesolCrossCheck_Upload_Service
             // Test DB connection right after logging settings
             try
             {
-                using var conn = _dbHelper.OpenConnectionAsync().GetAwaiter().GetResult();
-                using var cmd = conn.CreateCommand();
-                cmd.CommandText = "SELECT 1";
-                var result = cmd.ExecuteScalar();
-                _logger.LogInformation(
-                    "DB connection test succeeded. Info={Info}, Result={Result}",
-                    _dbHelper.GetSafeConnectionInfo(), result
-                );
+                using (_logger.BeginScope(new Dictionary<string, object> { ["System"] = "DB" }))
+                {
+                    using var conn = _dbHelper.OpenConnectionAsync().GetAwaiter().GetResult();
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = "SELECT 1";
+                    var result = cmd.ExecuteScalar();
+                    _logger.LogInformation(
+                        "DB connection test succeeded. Info={Info}, Result={Result}",
+                        _dbHelper.GetSafeConnectionInfo(), result
+                    );
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex,
-                    "DB connection test failed. Info={Info}",
-                    _dbHelper.GetSafeConnectionInfo()
-                );
+                using (_logger.BeginScope(new Dictionary<string, object> { ["System"] = "DB" }))
+                {
+                    _logger.LogError(ex,
+                        "DB connection test failed. Info={Info}",
+                        _dbHelper.GetSafeConnectionInfo()
+                    );
+                }
             }
 
             // Ensure local/remote directories
@@ -77,19 +85,26 @@ namespace TracesolCrossCheck_Upload_Service
                 try { Directory.CreateDirectory(uploadSettings.RemoteFilePath); }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed to create RemoteFilePath at startup: {Path}", uploadSettings.RemoteFilePath);
+                    using (_logger.BeginScope(new Dictionary<string, object> { ["System"] = "FILE" }))
+                    {
+                        _logger.LogError(ex, "Failed to create RemoteFilePath at startup: {Path}", uploadSettings.RemoteFilePath);
+                    }
                 }
             }
 
             // Watch for changes to ensure folders exist if paths change at runtime
             _uploadMonitor.OnChange(updated =>
             {
+                using var scope2 = _logger.BeginScope(new Dictionary<string, object> { ["System"] = "APP" });
                 if (!string.IsNullOrWhiteSpace(updated.LocalFilePath))
                 {
                     try { Directory.CreateDirectory(updated.LocalFilePath); }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Failed to create LocalFilePath at runtime: {Path}", updated.LocalFilePath);
+                        using (_logger.BeginScope(new Dictionary<string, object> { ["System"] = "FILE" }))
+                        {
+                            _logger.LogError(ex, "Failed to create LocalFilePath at runtime: {Path}", updated.LocalFilePath);
+                        }
                     }
                 }
                 if (!string.IsNullOrWhiteSpace(updated.RemoteFilePath))
@@ -97,7 +112,10 @@ namespace TracesolCrossCheck_Upload_Service
                     try { Directory.CreateDirectory(updated.RemoteFilePath); }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Failed to create RemoteFilePath at runtime: {Path}", updated.RemoteFilePath);
+                        using (_logger.BeginScope(new Dictionary<string, object> { ["System"] = "FILE" }))
+                        {
+                            _logger.LogError(ex, "Failed to create RemoteFilePath at runtime: {Path}", updated.RemoteFilePath);
+                        }
                     }
                 }
             });
@@ -105,6 +123,8 @@ namespace TracesolCrossCheck_Upload_Service
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            using var scope = _logger.BeginScope(new Dictionary<string, object> { ["System"] = "APP" });
+
             while (!stoppingToken.IsCancellationRequested)
             {
                 var upload = _uploadMonitor.CurrentValue;

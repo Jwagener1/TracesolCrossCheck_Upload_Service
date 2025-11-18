@@ -27,6 +27,8 @@ public sealed class ItemLogQueryHelper : IItemLogQueryHelper
 
     public async Task<ItemLogRecord?> QueryFirstUnsentAsync(CancellationToken ct = default)
     {
+        using var scope = _logger.BeginScope(new Dictionary<string, object> { ["System"] = "DB" });
+
         var db = _dbOptions.CurrentValue;
         var table = $"{BracketIdentifier("dbo")}.{BracketIdentifier(db.ItemLogTable)}";
         var sql = $@"SELECT TOP (1)

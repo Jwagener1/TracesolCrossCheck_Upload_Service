@@ -16,11 +16,28 @@ var settingsPath = Path.Combine(settingsDir, "settings.json");
 // Throws if missing (by design, since you said it will always be there)
 builder.Configuration.AddJsonFile(settingsPath, optional: false, reloadOnChange: true);
 
-// Configure Serilog as the logging provider (console sink + config)
+// Ensure log directory exists
+var logDir = Path.Combine(settingsDir, "Upload_Logs");
+Directory.CreateDirectory(logDir);
+var logPath = Path.Combine(logDir, "upload.log");
+
+// Requested format with system tag: 2025-11-18 08:13:45 [WRN] [APP|DB|FILE] Message
+const string outputTemplate = "{Timestamp:yyyy-MM-dd HH:mm:ss} [{Level:u3}] [{System}] {Message:lj}{NewLine}{Exception}";
+
+// Configure Serilog as the logging provider (console + single static file)
+// We do not use rolling here to avoid date in filename; a background service truncates at midnight.
 Log.Logger = new LoggerConfiguration()
     .ReadFrom.Configuration(builder.Configuration)
     .Enrich.FromLogContext()
-    .WriteTo.Console()
+    .Enrich.WithProperty("System", "APP") // default category
+    .WriteTo.Console(outputTemplate: outputTemplate)
+    .WriteTo.File(
+        path: logPath,
+        outputTemplate: outputTemplate,
+        // No rolling interval => single file named upload.log
+        rollOnFileSizeLimit: false,
+        shared: true
+    )
     .CreateLogger();
 
 builder.Logging.ClearProviders();
@@ -41,6 +58,9 @@ builder.Services.AddSingleton<IDbConnectionHelper, DbConnectionHelper>();
 builder.Services.AddSingleton<IItemLogQueryHelper, ItemLogQueryHelper>();
 builder.Services.AddSingleton<IItemLogCsvWriter, ItemLogCsvWriter>();
 builder.Services.AddSingleton<IItemLogUpdateHelper, ItemLogUpdateHelper>();
+
+// Background service to truncate upload.log at midnight so the file resets daily
+builder.Services.AddHostedService<LogMaintenanceService>();
 
 builder.Services.AddHostedService<Worker>();
 

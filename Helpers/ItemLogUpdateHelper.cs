@@ -26,6 +26,8 @@ public sealed class ItemLogUpdateHelper : IItemLogUpdateHelper
 
     public async Task<bool> MarkSentAsync(long id, CancellationToken ct = default)
     {
+        using var scope = _logger.BeginScope(new Dictionary<string, object> { ["System"] = "DB" });
+
         var db = _dbOptions.CurrentValue;
         var table = Bracket("dbo") + "." + Bracket(db.ItemLogTable);
         var sql = $@"UPDATE {table}

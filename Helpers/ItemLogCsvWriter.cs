@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using Microsoft.Extensions.Options;
 using TracesolCrossCheck_Upload_Service.Models;
+using Microsoft.Extensions.Logging;
 
 namespace TracesolCrossCheck_Upload_Service.Helpers;
 
@@ -20,14 +21,18 @@ public interface IItemLogCsvWriter
 public sealed class ItemLogCsvWriter : IItemLogCsvWriter
 {
     private readonly IOptionsMonitor<UploadServiceSettings> _uploadOptions;
+    private readonly ILogger<ItemLogCsvWriter> _logger;
 
-    public ItemLogCsvWriter(IOptionsMonitor<UploadServiceSettings> uploadOptions)
+    public ItemLogCsvWriter(IOptionsMonitor<UploadServiceSettings> uploadOptions, ILogger<ItemLogCsvWriter> logger)
     {
         _uploadOptions = uploadOptions;
+        _logger = logger;
     }
 
     public async Task<string> WriteRecordAsync(ItemLogRecord record, CancellationToken ct = default)
     {
+        using var scope = _logger.BeginScope(new Dictionary<string, object> { ["System"] = "FILE" });
+
         var settings = _uploadOptions.CurrentValue;
         var localFolder = settings.LocalFilePath;
         var remoteFolder = settings.RemoteFilePath;
@@ -44,12 +49,14 @@ public sealed class ItemLogCsvWriter : IItemLogCsvWriter
 
         var csv = ToCsv(record, includeHeader: false); // data only
         await File.WriteAllTextAsync(localPath, csv, Encoding.UTF8, ct);
+        _logger.LogInformation("Wrote CSV locally: {Path}", localPath);
 
         // Copy to remote if configured
         if (!string.IsNullOrWhiteSpace(remoteFolder))
         {
             var remotePath = Path.Combine(remoteFolder, SanitizeFileName(fileName));
             File.Copy(localPath, remotePath, overwrite: true);
+            _logger.LogInformation("Copied CSV to remote: {Path}", remotePath);
         }
 
         return localPath;
@@ -57,6 +64,8 @@ public sealed class ItemLogCsvWriter : IItemLogCsvWriter
 
     public async Task<string> WriteRecordsAsync(IEnumerable<ItemLogRecord> records, string? fileName = null, CancellationToken ct = default)
     {
+        using var scope = _logger.BeginScope(new Dictionary<string, object> { ["System"] = "FILE" });
+
         var list = records as IList<ItemLogRecord> ?? records.ToList();
         if (list.Count == 0)
             throw new InvalidOperationException("No records to write");
@@ -80,11 +89,13 @@ public sealed class ItemLogCsvWriter : IItemLogCsvWriter
             sb.AppendLine(ToCsvLine(r));
 
         await File.WriteAllTextAsync(localPath, sb.ToString(), Encoding.UTF8, ct);
+        _logger.LogInformation("Wrote CSV locally: {Path}", localPath);
 
         if (!string.IsNullOrWhiteSpace(remoteFolder))
         {
             var remotePath = Path.Combine(remoteFolder, SanitizeFileName(name));
             File.Copy(localPath, remotePath, overwrite: true);
+            _logger.LogInformation("Copied CSV to remote: {Path}", remotePath);
         }
 
         return localPath;
