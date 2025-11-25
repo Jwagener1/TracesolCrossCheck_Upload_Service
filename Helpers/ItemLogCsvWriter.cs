@@ -109,9 +109,8 @@ public sealed class ItemLogCsvWriter : IItemLogCsvWriter
             // Header intentionally omitted by default; provide only if explicitly requested
             sb.AppendLine(string.Join(',', new[]
             {
-                "ID","DateTimeStamp","SKU","Pallet_Number","OCR_Description_1","Quantity","Batch_Number","Barcode",
-                "OCR_Description_2","Cross_Check","Label_Printed","Label_Applied","Check_Scan_Result","Valid","Sent",
-                "ImageSent","Duplicate","Complete"
+                "DateTimeStamp","SKU","Pallet_Number","OCR_Description_1","Quantity","Batch_Number","Barcode",
+                "OCR_Description_2","Cross_Check","Label_Printed","Label_Applied","Check_Scan_Result","Valid","Duplicate"
             }));
         }
         sb.AppendLine(ToCsvLine(record));
@@ -123,7 +122,6 @@ public sealed class ItemLogCsvWriter : IItemLogCsvWriter
         // Convert values to CSV-safe strings in the correct column order
         var values = new[]
         {
-            r.ID.ToString(CultureInfo.InvariantCulture),
             FormatDate(r.DateTimeStamp),
             Q(r.SKU),
             r.Pallet_Number?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
@@ -137,10 +135,7 @@ public sealed class ItemLogCsvWriter : IItemLogCsvWriter
             ToBit(r.Label_Applied),
             Q(r.Check_Scan_Result),
             ToBit(r.Valid),
-            ToBit(r.Sent),
-            ToBit(r.ImageSent),
-            ToBit(r.Duplicate),
-            ToBit(r.Complete)
+            ToBit(r.Duplicate)
         };
         return string.Join(',', values);
     }
