@@ -51,7 +51,7 @@ public sealed class ItemLogQueryHelper : IItemLogQueryHelper
       ,[Duplicate]
       ,[Complete]
   FROM {table} WITH (READPAST)
-  WHERE ([Sent] = 0)
+  WHERE ([Sent] = 0) AND ([Complete] = 1)
   ORDER BY [ID] ASC";
 
         _logger.LogDebug("Executing SQL: {Sql}", sql);
