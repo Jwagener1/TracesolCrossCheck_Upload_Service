@@ -208,6 +208,7 @@ try
     builder.Services.AddSingleton<IItemLogQueryHelper, ItemLogQueryHelper>();
     builder.Services.AddSingleton<IItemLogCsvWriter, ItemLogCsvWriter>();
     builder.Services.AddSingleton<IItemLogUpdateHelper, ItemLogUpdateHelper>();
+    builder.Services.AddSingleton<IDailyStatsUpdateHelper, DailyStatsUpdateHelper>();
 
     // Background service to truncate upload.log at midnight so the file resets daily
     builder.Services.AddHostedService<LogMaintenanceService>();

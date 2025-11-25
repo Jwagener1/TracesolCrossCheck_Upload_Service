@@ -22,11 +22,16 @@ public sealed class ItemLogCsvWriter : IItemLogCsvWriter
 {
     private readonly IOptionsMonitor<UploadServiceSettings> _uploadOptions;
     private readonly ILogger<ItemLogCsvWriter> _logger;
+    private readonly IDailyStatsUpdateHelper _statsHelper;
 
-    public ItemLogCsvWriter(IOptionsMonitor<UploadServiceSettings> uploadOptions, ILogger<ItemLogCsvWriter> logger)
+    public ItemLogCsvWriter(
+        IOptionsMonitor<UploadServiceSettings> uploadOptions, 
+        ILogger<ItemLogCsvWriter> logger,
+        IDailyStatsUpdateHelper statsHelper)
     {
         _uploadOptions = uploadOptions;
         _logger = logger;
+        _statsHelper = statsHelper;
     }
 
     public async Task<string> WriteRecordAsync(ItemLogRecord record, CancellationToken ct = default)
@@ -57,6 +62,17 @@ public sealed class ItemLogCsvWriter : IItemLogCsvWriter
             var remotePath = Path.Combine(remoteFolder, SanitizeFileName(fileName));
             File.Copy(localPath, remotePath, overwrite: true);
             _logger.LogInformation("Copied CSV to remote: {Path}", remotePath);
+        }
+
+        // Update DailyStats after writing the file
+        try
+        {
+            await _statsHelper.UpdateDailyStatsAsync(ct);
+            _logger.LogDebug("DailyStats updated after writing record {Id}", record.ID);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to update DailyStats after writing record {Id}", record.ID);
         }
 
         return localPath;
@@ -96,6 +112,17 @@ public sealed class ItemLogCsvWriter : IItemLogCsvWriter
             var remotePath = Path.Combine(remoteFolder, SanitizeFileName(name));
             File.Copy(localPath, remotePath, overwrite: true);
             _logger.LogInformation("Copied CSV to remote: {Path}", remotePath);
+        }
+
+        // Update DailyStats after writing the file
+        try
+        {
+            await _statsHelper.UpdateDailyStatsAsync(ct);
+            _logger.LogDebug("DailyStats updated after writing {Count} records", list.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to update DailyStats after writing {Count} records", list.Count);
         }
 
         return localPath;

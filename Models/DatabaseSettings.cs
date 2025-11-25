@@ -13,6 +13,7 @@ public sealed class DatabaseSettings
     public string Username { get; set; } = "Tracesol";
     public string Password { get; set; } = "Tracesol";
     public string ItemLogTable { get; set; } = "Records";
+    public string DailyStatsTable { get; set; } = "DailyStats";
 
     // Handy helper for later when you actually connect:
     public string BuildSqlConnectionString() =>
