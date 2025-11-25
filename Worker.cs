@@ -14,6 +14,7 @@ namespace TracesolCrossCheck_Upload_Service
         private readonly IItemLogQueryHelper _itemLogQueryHelper;
         private readonly IItemLogCsvWriter _csvWriter;
         private readonly IItemLogUpdateHelper _updateHelper;
+        private readonly IDailyStatsUpdateHelper _statsHelper;
 
         public Worker(
             ILogger<Worker> logger,
@@ -22,7 +23,8 @@ namespace TracesolCrossCheck_Upload_Service
             IDbConnectionHelper dbHelper,
             IItemLogQueryHelper itemLogQueryHelper,
             IItemLogCsvWriter csvWriter,
-            IItemLogUpdateHelper updateHelper
+            IItemLogUpdateHelper updateHelper,
+            IDailyStatsUpdateHelper statsHelper
         )
         {
             using var scope = logger.BeginScope(new Dictionary<string, object> { ["System"] = "APP" });
@@ -34,6 +36,7 @@ namespace TracesolCrossCheck_Upload_Service
             _itemLogQueryHelper = itemLogQueryHelper;
             _csvWriter = csvWriter;
             _updateHelper = updateHelper;
+            _statsHelper = statsHelper;
 
             var dbSettings = _dbMonitor.CurrentValue;
             var uploadSettings = _uploadMonitor.CurrentValue;
@@ -148,9 +151,24 @@ namespace TracesolCrossCheck_Upload_Service
                         // Mark as sent
                         var marked = await _updateHelper.MarkSentAsync(record.ID, stoppingToken);
                         if (marked)
+                        {
                             _logger.LogInformation("Record {Id} marked as sent.", record.ID);
+                            
+                            // Update DailyStats after the record has been marked as sent
+                            try
+                            {
+                                await _statsHelper.UpdateDailyStatsAsync(stoppingToken);
+                                _logger.LogDebug("DailyStats updated after marking record {Id} as sent", record.ID);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogError(ex, "Failed to update DailyStats after marking record {Id} as sent", record.ID);
+                            }
+                        }
                         else
+                        {
                             _logger.LogWarning("Record {Id} was not updated (already sent or missing).", record.ID);
+                        }
                     }
                     else
                     {
