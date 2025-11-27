@@ -170,10 +170,6 @@ namespace TracesolCrossCheck_Upload_Service
                             _logger.LogWarning("Record {Id} was not updated (already sent or missing).", record.ID);
                         }
                     }
-                    else
-                    {
-                        _logger.LogInformation("No unsent records found.");
-                    }
                 }
                 catch (Exception ex)
                 {
